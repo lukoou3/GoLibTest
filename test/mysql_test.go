@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -68,15 +69,22 @@ func queryOne2() {
 func queryOneSome() {
 	s := "select id,code,name,age,birthday from people"
 	r, err := db.Query(s)
-	var p People
 	defer r.Close()
 	if err != nil {
 		fmt.Printf("err: %v\n", err)
 	} else {
+		var datas []People
 		for r.Next() {
+			var p People
 			r.Scan(&p.id, &p.code, &p.name, &p.age, &p.birthday)
+			datas = append(datas, p)
 			fmt.Printf("u: %v\n", p)
 		}
+		fmt.Println(datas)
+		sort.SliceStable(datas, func(i, j int) bool {
+			return datas[i].code <= datas[j].code
+		})
+		fmt.Println(datas)
 	}
 }
 

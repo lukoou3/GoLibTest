@@ -81,14 +81,25 @@ func downloadImg(url string, imgPath string) (string, error) {
 func markdownUseLocalImg(text string, imgPath string) string {
 	re := regexp.MustCompile(`!\[\]\((http.*?)\)`)
 	subStrs := re.FindAllStringSubmatch(text, -1)
+	urlMap := make(map[string]int)
 	for _, strs := range subStrs {
 		url := strs[1]
+		urlMap[url] = 1
+	}
+	fmt.Printf("下载的图片数:%d\n", len(urlMap))
+	for url, _ := range urlMap {
+		fmt.Println(urlMap)
 		name, err := downloadImg(url, imgPath)
 		if err == nil {
 			text = strings.ReplaceAll(text, url, "assets/"+name)
 		} else {
-			fmt.Printf("下载失败:%s\n", text)
-			fmt.Println(err)
+			name, err = downloadImg(url, imgPath)
+			if err == nil {
+				text = strings.ReplaceAll(text, url, "assets/"+name)
+			} else {
+				fmt.Printf("下载失败:%s\n", text)
+				fmt.Println(err)
+			}
 		}
 	}
 	return text
@@ -161,6 +172,15 @@ func convertHtag(doc *goquery.Selection) {
 	})
 }
 
+func convertBr(doc *goquery.Selection) {
+	doc.Find("br").Each(func(i int, selection *goquery.Selection) {
+		selection.ReplaceWithNodes(&html.Node{
+			Type: html.TextNode,
+			Data: "\n",
+		})
+	})
+}
+
 func convertBtag(doc *goquery.Selection) {
 	doc.Find("b,strong").Each(func(i int, selection *goquery.Selection) {
 		node := selection.Nodes[0]
@@ -175,13 +195,24 @@ func convertBtag(doc *goquery.Selection) {
 	})
 }
 
+var reNum = regexp.MustCompile(`^\d+$`)
+
 func convertUl(doc *goquery.Selection) {
 	doc.Find("ul,ol").Each(func(i int, selection *goquery.Selection) {
+		notDigit := false
 		texts := selection.ChildrenFiltered("li").Map(func(i int, li *goquery.Selection) string {
-			return "* " + strings.TrimSpace(li.Text())
+			text := strings.TrimSpace(li.Text())
+			if !notDigit && !reNum.MatchString(text) {
+				notDigit = true
+			}
+			return "* " + text
 		})
-		text := strings.Join(texts, "    \n")
-		replaceWithDiv(selection, text)
+		if notDigit {
+			text := strings.Join(texts, "    \n")
+			replaceWithDiv(selection, text)
+		} else {
+			selection.Remove()
+		}
 	})
 }
 
@@ -191,10 +222,15 @@ func convertCode(doc *goquery.Selection) {
 		var text string
 		if strings.Contains(code, "\n") {
 			text = fmt.Sprintf("```%s\n%s\n```", "py", code)
+			replaceWithDiv(selection, text)
 		} else {
 			text = fmt.Sprintf("`%s`", code)
+			selection.ReplaceWithNodes(&html.Node{
+				Type: html.TextNode,
+				Data: text,
+			})
 		}
-		replaceWithDiv(selection, text)
+
 	})
 }
 
@@ -228,7 +264,7 @@ func convertTable(doc *goquery.Selection) {
 }
 
 func outTagText(node *html.Node, sep string, strip bool) string {
-	lineAppend := "\n"
+	lineAppend := "\n\n"
 	if node.Type == html.TextNode {
 		if strip {
 			return strings.TrimSpace(node.Data)
@@ -276,29 +312,36 @@ func outTagText(node *html.Node, sep string, strip bool) string {
 }
 
 // go get -u github.com/PuerkitoBio/goquery
-func main2() {
+func Html2Md() {
 	data, err := os.ReadFile("D:\\pycharmWork\\pyutils\\html2md\\test\\txt")
 	doc, err := goquery.NewDocumentFromReader(bytes.NewBuffer(data))
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	contentDiv := doc.Find("article")
+	//selection := "article"
+	selection := "#content_views"
+	if len(os.Args) >= 2 {
+		selection = os.Args[1]
+	}
+	contentDiv := doc.Find(selection)
 
+	convertBr(contentDiv)
 	convertLink(contentDiv)
 	convertImg(contentDiv)
 	convertHtag(contentDiv)
 	convertBtag(contentDiv)
-	convertUl(contentDiv)
 	convertCode(contentDiv)
 	convertBlockquote(contentDiv)
+	convertUl(contentDiv)
 	convertTable(contentDiv)
 
-	fmt.Println(strings.Repeat("-", 60) + "\n")
+	fmt.Println(strings.Repeat("-", 160) + "\n")
 	text := outTagText(contentDiv.Nodes[0], "", true)
 	text = markdownUseLocalImg(text, "assets")
 	fmt.Println(text)
-	fmt.Println(strings.Repeat("-", 60) + "\n")
+	os.WriteFile("out.txt", []byte(text), 0666)
+	fmt.Println(strings.Repeat("-", 160) + "\n")
 	//fmt.Println(contentDiv.Text())
 	//fmt.Println(strings.Repeat("-", 60))
 	//fmt.Println(contentDiv.Html())
