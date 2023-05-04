@@ -133,6 +133,10 @@ func convertLink(doc *goquery.Selection) {
 }
 
 func convertImg(doc *goquery.Selection) {
+	// csdn代码查看更多图片
+	doc.Find("img.look-more-preCode").Each(func(i int, selection *goquery.Selection) {
+		selection.Remove()
+	})
 	doc.Find("img").Each(func(i int, selection *goquery.Selection) {
 		url, _ := selection.Attr("src")
 		if strings.HasPrefix(url, "//") {
@@ -220,8 +224,20 @@ func convertCode(doc *goquery.Selection) {
 	doc.Find("code,pre").Each(func(i int, selection *goquery.Selection) {
 		code := selection.Text()
 		var text string
+
+		if selection.Find("ol li").Text() == code {
+			var sb strings.Builder
+			selection.Find("ol li").Each(func(i int, selection *goquery.Selection) {
+				if i != 0 {
+					sb.WriteString("\n")
+				}
+				sb.WriteString(selection.Text())
+			})
+			code = sb.String()
+		}
+
 		if strings.Contains(code, "\n") {
-			text = fmt.Sprintf("```%s\n%s\n```", "py", code)
+			text = fmt.Sprintf("```%s\n%s\n```", "go", code)
 			replaceWithDiv(selection, text)
 		} else {
 			text = fmt.Sprintf("`%s`", code)
@@ -320,11 +336,13 @@ func Html2Md() {
 		return
 	}
 	//selection := "article"
-	selection := "#content_views"
+	//selection := "#content_views"
+	//selection = "#cnblogs_post_body"
 	if len(os.Args) >= 2 {
-		selection = os.Args[1]
+		//selection = os.Args[1]
 	}
-	contentDiv := doc.Find(selection)
+	//contentDiv := doc.Find(selection)
+	contentDiv := doc.Selection
 
 	convertBr(contentDiv)
 	convertLink(contentDiv)
@@ -338,6 +356,7 @@ func Html2Md() {
 
 	fmt.Println(strings.Repeat("-", 160) + "\n")
 	text := outTagText(contentDiv.Nodes[0], "", true)
+	text = strings.ReplaceAll(text, " ", "") // &nbsp;
 	text = markdownUseLocalImg(text, "assets")
 	fmt.Println(text)
 	os.WriteFile("out.txt", []byte(text), 0666)
