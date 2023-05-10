@@ -5,6 +5,7 @@ import (
 	"crypto/md5"
 	"fmt"
 	"github.com/PuerkitoBio/goquery"
+	"github.com/samber/lo"
 	"golang.org/x/net/html"
 	"golang.org/x/net/html/atom"
 	"io"
@@ -222,7 +223,19 @@ func convertUl(doc *goquery.Selection) {
 
 func convertCode(doc *goquery.Selection) {
 	doc.Find("code,pre").Each(func(i int, selection *goquery.Selection) {
+		// csdn代码行号
+		selection.Find("code.hljs-line-numbers").Each(func(i int, selection *goquery.Selection) {
+			lines := strings.Split(selection.Text(), "\n")
+			allNum := lo.EveryBy(lines, func(line string) bool {
+				line = strings.TrimSpace(line)
+				return line == "" || reNum.MatchString(line)
+			})
+			if allNum {
+				selection.Remove()
+			}
+		})
 		code := selection.Text()
+
 		var text string
 
 		if selection.Find("ol li").Text() == code {
